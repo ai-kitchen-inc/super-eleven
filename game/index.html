@@ -1,0 +1,193 @@
+<title>Half Volley</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;1,700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* layout: full-bleed night pitch; broadcast HUD pinned to the corners; the menu is a left-hand
+   team sheet laid over a live CPU match. One deliberate look (floodlit night), so a single theme. */
+:root {
+  color-scheme: dark;
+  --night: #070b18; --sheet: rgba(9, 13, 28, .88); --chalk: #f3f1e7; --dim: #a8adbf;
+  --flood: #ffe14a; --turf: #2c8a3c; --line: rgba(243, 241, 231, .2); --ink: #0b0f1d;
+  --display: 'Chakra Petch', 'Arial Narrow', Arial, sans-serif;
+  --body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--night); color: var(--chalk); font: 400 15px/1.45 var(--body); overflow: hidden; }
+button { font: inherit; color: inherit; }
+#app { position: relative; height: 100%; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: none; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+#fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+.layer {
+  position: absolute; inset: 0; padding-block: 12px; pointer-events: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* ---- match HUD ---- */
+.score {
+  position: absolute; top: 12px; left: max(16px, env(safe-area-inset-left, 0px));
+  display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 8px;
+  background: var(--sheet); border-left: 3px solid var(--flood);
+  font: 600 17px/1 var(--display); letter-spacing: .04em; font-variant-numeric: tabular-nums;
+}
+.score i { width: 10px; height: 16px; display: block; }
+.score .n { font: italic 700 20px/1 var(--display); padding: 0 4px; white-space: nowrap; }
+.score .clk { margin-left: 8px; padding-left: 10px; border-left: 1px solid var(--line); color: var(--dim); font-size: 14px; white-space: nowrap; }
+#rtag {
+  position: absolute; top: 14px; right: max(16px, env(safe-area-inset-right, 0px));
+  font: italic 700 22px/1 var(--display); letter-spacing: .12em; color: var(--flood); animation: blink 1s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: .25; } }
+#msg {
+  position: absolute; left: 0; right: 0; top: 24%; text-align: center; padding: 0 16px;
+  font: italic 700 clamp(28px, 6vw, 60px)/1.05 var(--display); letter-spacing: .03em; text-transform: uppercase;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, .55), 0 0 26px rgba(0, 0, 0, .5);
+}
+.foot {
+  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: 12px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+}
+.who { min-width: 0; }
+#who { display: block; font: 600 16px/1.2 var(--display); letter-spacing: .05em; text-shadow: 0 2px 0 rgba(0, 0, 0, .6); white-space: pre; }
+#gauge { margin-top: 6px; width: 150px; max-width: 40vw; height: 9px; background: rgba(0, 0, 0, .55); outline: 1px solid var(--line); opacity: 0; }
+#gauge-fill { height: 100%; width: 0; background: linear-gradient(90deg, #4fd06a 0 45%, var(--flood) 62%, #ff5a3c 100%); background-size: 150px 100%; }
+#radar { width: 168px; max-width: 42vw; height: auto; aspect-ratio: 168 / 110; display: block; }
+#touch:not([hidden]) + #hud .foot { bottom: auto; top: 50px; align-items: flex-start; }
+
+/* ---- menu: a team sheet over the live demo ---- */
+.menu { pointer-events: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: linear-gradient(90deg, rgba(7, 11, 24, .82) 0, rgba(7, 11, 24, .5) 46%, rgba(7, 11, 24, 0) 78%); }
+.sheet { width: min(100%, 430px); display: flex; flex-direction: column; gap: 16px; padding-block: 10px 28px; }
+h1 { margin: 0; font: italic 700 clamp(40px, 11vw, 62px)/.92 var(--display); letter-spacing: -.01em; text-transform: uppercase; }
+h1 span { color: var(--flood); }
+.tag { margin: 0; color: var(--dim); max-width: 36ch; }
+h2 { margin: 0 0 7px; font: 600 12px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.chip, .seg button, .ghost {
+  display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; cursor: pointer; text-align: left;
+  background: rgba(243, 241, 231, .06); border: 1px solid var(--line); border-radius: 2px; font-weight: 500;
+}
+.chip i { flex: none; width: 10px; height: 18px; outline: 1px solid rgba(0, 0, 0, .4); }
+.chip[aria-pressed="true"], .seg button[aria-pressed="true"] { border-color: var(--flood); background: rgba(255, 225, 74, .14); }
+.pair { display: flex; flex-wrap: wrap; gap: 16px; }
+.seg { display: flex; gap: 6px; }
+.go {
+  align-self: flex-start; padding: 12px 26px; cursor: pointer; border: 0; border-radius: 2px;
+  background: var(--flood); color: var(--ink); font: italic 700 22px/1 var(--display); letter-spacing: .04em; text-transform: uppercase;
+}
+.go:hover { filter: brightness(1.08); }
+button:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+.keys { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 14px; }
+.keys dt { font: 600 13px/1.5 var(--display); color: var(--flood); white-space: nowrap; }
+.keys dd { margin: 0; color: var(--chalk); }
+.note { margin: 0; color: var(--dim); font-size: 13px; }
+.ghost { font-size: 13px; color: var(--dim); }
+.err { margin: 20px 0; font-size: 16px; }
+
+/* ---- pause / half-time card ---- */
+#panel { pointer-events: auto; display: grid; place-items: center; background: rgba(7, 11, 24, .55); }
+.card { width: min(100%, 360px); padding: 22px; background: var(--sheet); border-left: 3px solid var(--flood); display: flex; flex-direction: column; gap: 12px; }
+.card h3 { margin: 0; font: italic 700 34px/1 var(--display); text-transform: uppercase; }
+.card p { margin: 0; color: var(--dim); font-variant-numeric: tabular-nums; }
+.card .pair { gap: 8px; }
+
+/* ---- touch pad ---- */
+#touch { pointer-events: none; }
+#stick, .tb { position: absolute; pointer-events: auto; touch-action: none; }
+#stick { left: max(18px, env(safe-area-inset-left, 0px)); bottom: 18px; width: 124px; height: 124px; border-radius: 50%; background: rgba(243, 241, 231, .1); border: 1px solid var(--line); }
+#nub { position: absolute; left: 37px; top: 37px; width: 50px; height: 50px; border-radius: 50%; background: rgba(243, 241, 231, .45); }
+.tb { width: 62px; height: 62px; border-radius: 50%; background: rgba(9, 13, 28, .55); border: 1px solid var(--line); font: 600 11px/1 var(--display); letter-spacing: .06em; display: grid; place-items: center; }
+.tb.a { right: max(18px, env(safe-area-inset-right, 0px)); bottom: 84px; }
+.tb.b { right: calc(max(18px, env(safe-area-inset-right, 0px)) + 70px); bottom: 26px; border-color: var(--flood); }
+.tb.c { right: calc(max(18px, env(safe-area-inset-right, 0px)) + 70px); bottom: 140px; }
+.tb.d { right: calc(max(18px, env(safe-area-inset-right, 0px)) + 140px); bottom: 84px; }
+.tb.e { right: max(18px, env(safe-area-inset-right, 0px)); bottom: 164px; width: 48px; height: 48px; }
+.tb.f { right: max(18px, env(safe-area-inset-right, 0px)); bottom: 18px; width: 48px; height: 48px; }
+@media (prefers-reduced-motion: reduce) { #rtag { animation: none; } }
+</style>
+
+<div id="app">
+  <canvas id="cv" tabindex="0" aria-label="Football match"></canvas>
+  <div id="fade"></div>
+
+  <div id="touch" class="layer" hidden>
+    <div id="stick"><div id="nub"></div></div>
+    <div class="tb a" data-btn="shoot">SHOOT</div>
+    <div class="tb b" data-btn="pass">PASS</div>
+    <div class="tb c" data-btn="through">THRU</div>
+    <div class="tb d" data-btn="long">LONG</div>
+    <div class="tb e" data-btn="switch">CHG</div>
+    <div class="tb f" data-btn="sprint">RUN</div>
+  </div>
+
+  <div id="hud" class="layer" hidden>
+    <div class="score">
+      <i id="cA"></i><b id="tA">AZU</b>
+      <span class="n"><span id="sA">0</span> &ndash; <span id="sB">0</span></span>
+      <b id="tB">RED</b><i id="cB"></i>
+      <span class="clk"><span id="clock">00:00</span> <span id="half">1st</span></span>
+    </div>
+    <div id="rtag" hidden>Replay</div>
+    <div id="msg" aria-live="polite"></div>
+    <div class="foot">
+      <div class="who"><span id="who"></span><div id="gauge"><div id="gauge-fill"></div></div></div>
+      <canvas id="radar" width="168" height="110" aria-hidden="true"></canvas>
+    </div>
+  </div>
+
+  <div id="menu" class="layer menu">
+    <div class="sheet">
+      <h1>Half<br><span>Volley</span></h1>
+      <p class="tag">Eleven-a-side arcade football, animated by hand. Hips twist, shoulders answer, and every kick has a wind-up.</p>
+      <section><h2>Your club</h2><div id="pick-you" class="chips"></div></section>
+      <section><h2>Opponent</h2><div id="pick-foe" class="chips"></div></section>
+      <div class="pair">
+        <section><h2>Half length</h2><div class="seg">
+          <button type="button" id="m2" data-mins="2">2 min</button><button type="button" id="m3" data-mins="3">3 min</button><button type="button" id="m5" data-mins="5">5 min</button>
+        </div></section>
+        <section><h2>Level</h2><div class="seg">
+          <button type="button" id="d0" data-diff="0">Easy</button><button type="button" id="d1" data-diff="1">Normal</button><button type="button" id="d2" data-diff="2">Hard</button>
+        </div></section>
+      </div>
+      <button type="button" id="go" class="go">Kick off</button>
+      <section>
+        <h2>Controls</h2>
+        <dl class="keys">
+          <dt>Arrows</dt><dd>Move</dd>
+          <dt>X</dt><dd>Short pass. Without the ball: close down and tackle</dd>
+          <dt>S</dt><dd>Through ball</dd>
+          <dt>A</dt><dd>Long pass or cross. Without the ball: slide tackle</dd>
+          <dt>D</dt><dd>Shoot, hold for power, Up/Down picks the post. Without the ball: call a second man</dd>
+          <dt>Shift</dt><dd>Sprint</dd>
+          <dt>Q</dt><dd>Change player</dd>
+          <dt>Enter</dt><dd>Pause</dd>
+        </dl>
+      </section>
+      <p class="note">A gamepad works too: bottom button passes, right goes long, left shoots, top plays it through, right shoulder sprints, left shoulder changes player.</p>
+      <div class="pair">
+        <button type="button" id="snd" class="ghost">Sound on</button>
+        <button type="button" id="res" class="ghost">480-line picture</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel" class="layer" hidden>
+    <div class="card">
+      <h3 id="panel-title">Paused</h3>
+      <p id="panel-sub"></p>
+      <div class="pair">
+        <button type="button" id="panel-go" class="go">Resume</button>
+        <button type="button" id="quit" class="ghost">Quit to menu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/rig.js"></script>
+<script src="js/anim.js"></script>
+<script src="js/world.js"></script>
+<script src="js/match.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
